@@ -518,11 +518,24 @@ class spi_device_pass_base_vseq extends spi_device_base_vseq;
 
   // Task to update mirrored value of addr_4b_en after end of SPI transaction
   virtual task schedule_en_4b_predict(bit value);
+    bit addr_4b_en_prev = get_field_val(ral.cfg.addr_4b_en, `gmv(ral.cfg.addr_4b_en));
     fork begin
+      bit addr_4b_en_cur;
       @(posedge cfg.spi_host_agent_cfg.vif.csb[FW_FLASH_CSB_ID]);
-      `uvm_info(`gfn, $sformatf("set addr_4b_en = %0b", value), UVM_MEDIUM)
-      cfg.clk_rst_vif.wait_clks(3);
-      void'(ral.cfg.addr_4b_en.predict(.value(value)));
+      // Check if there is any update in mirrored value of addr_4b_en
+      // If there is a change, there has been a register write to CFG during the wait time
+      // in this thread, so, this prediction must be skipped
+      addr_4b_en_cur = get_field_val(ral.cfg.addr_4b_en, `gmv(ral.cfg.addr_4b_en));
+      if (addr_4b_en_cur != addr_4b_en_prev) begin
+        `uvm_info(`gfn,
+          $sformatf("Detected change in mirrored value of addr_4b_en : %0b", addr_4b_en_cur),
+        UVM_MEDIUM)
+        `uvm_info(`gfn, "Skip prediction of addr_4b_en", UVM_MEDIUM)
+      end else begin
+        `uvm_info(`gfn, $sformatf("set addr_4b_en = %0b", value), UVM_MEDIUM)
+        cfg.clk_rst_vif.wait_clks(3);
+        void'(ral.cfg.addr_4b_en.predict(.value(value)));
+      end
     end join_none
   endtask
 
@@ -749,9 +762,9 @@ class spi_device_pass_base_vseq extends spi_device_base_vseq;
             break;
           end
         end)
-      // Check the contents of addr4b_en
-      csr_rd_check(.ptr(ral.cfg.addr_4b_en),
-             .compare_value(cfg.spi_device_agent_cfg.flash_addr_4b_en));
+      // Check the contents of addr4b_en comparing against mirrored value in RAL
+      csr_rd_check(.ptr(ral.cfg.addr_4b_en), .compare_vs_ral(1));
+             //.compare_value(cfg.spi_device_agent_cfg.flash_addr_4b_en));
       cfg.spi_cfg_sema.put();
   endtask
 
