@@ -1,0 +1,98 @@
+// Copyright lowRISC contributors.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+{
+  build_cmd:  "{job_prefix} surelog"
+  build_ex:   "{build_dir}/uhd"
+  run_cmd:    "{job_prefix} surelog"
+
+  // This option enables the following: (needed for uvm_hdl_*)
+  //  - Read capability on registers, variables, and nets
+  //  - Write (deposit) capability on registers and variables
+  //  - Force capability on registers, variables, and nets
+  // TODO Trim this flag since +f hurts performance.
+  //vcs_build_opt_debug_access: "-debug_access+f"
+  //vcs_build_opt_debug_region: "-debug_region=cell+lib"
+  post_flist_opts: ""
+  build_opts: ["-parse",
+               "/home/crteja/experiments/Surelog/third_party/UVM/uvm-1.2/src/uvm.sv", 
+               "+incdir+/home/crteja/experiments/Surelog/third_party/UVM/uvm-1.2/src", 
+               "-f {sv_flist}",
+               "--Mdir={build_ex}",
+               "-nowarning",
+               "-filtercomments",
+               "-noinfo",
+               "-top tb"
+               ]
+
+  run_opts:   ["-licqueue",
+               "-ucli -do {run_script}",
+               "+ntb_random_seed={seed}",
+               // Disable the display of the SystemVerilog assert and cover statement summary
+               // at the end of simulation. This summary is list of assertions that started but
+               // did not finish because the simulation terminated, or assertions that did not
+               // fire at all. The latter is analyzed anyway in the collected coverage. Neither
+               // of these is useful in regular simulations.
+               "-assert nopostproc",
+               "+UVM_TESTNAME={uvm_test}",
+               "+UVM_TEST_SEQ={uvm_test_seq}"]
+
+  // Supported wave dumping formats (in order of preference).
+  supported_wave_formats: ["fsdb", "vpd"]
+
+  // Default tcl script used when running the sim. Override if needed.
+  run_script: "{dv_root}/tools/sim.tcl"
+
+  // pass and fail patterns
+  build_fail_patterns: ["^Error-.*$"]
+  run_fail_patterns:   ["^Error-.*$"] // Null pointer error
+
+  cov_db_dir: "{scratch_path}/coverage/{build_mode}.vdb"
+  // Individual test specific coverage data - this will be deleted if the test fails
+  // so that coverage from failiing tests is not included in the final report.
+  cov_db_test_dir_name: "{run_dir_name}.{seed}"
+  cov_db_test_dir: "{cov_db_dir}/snps/coverage/db/testdata/{cov_db_test_dir_name}"
+
+  build_modes: [
+    {
+      name: surelog_gui
+      is_sim_mode: 1
+      build_opts: ["-debug_access+all+reverse"]
+      run_opts: ["-gui", "-l {run_dir}/simv.log"]
+    }
+    {
+      name: surelog_waves
+      is_sim_mode: 1
+      build_opts: []
+    }
+    {
+      name: surelog_waves_off
+      is_sim_mode: 1
+      build_opts: []
+    }
+    {
+      name: surelog_cov
+      is_sim_mode: 1
+      build_opts: []
+
+      run_opts:   []
+    }
+    {
+      name: surelog_xprop
+      is_sim_mode: 1
+      build_opts: []
+    }
+    {
+      name: surelog_profile
+      is_sim_mode: 1
+      build_opts: ["-simprofile"]
+      run_opts:   ["-simprofile {profile}"]
+    }
+    {
+      name: surelog_loopdetect
+      is_sim_mode: 1
+      build_opts: ["+vcs+loopreport", "+vcs+loopdetect"]
+      run_opts:   ["+vcs+loopreport", "+vcs+loopdetect"]
+    }
+  ]
+}
